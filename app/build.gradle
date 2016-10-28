@@ -1,0 +1,62 @@
+apply plugin: 'com.android.application'
+
+android {
+    compileSdkVersion 16
+    buildToolsVersion "23.0.1"
+    defaultConfig {
+        applicationId "com.opencv.demo"
+        minSdkVersion 16
+        targetSdkVersion 23
+        versionCode 1
+        versionName "1.0"
+    }
+
+    sourceSets {
+        main {
+            jniLibs.srcDirs = ['src/main/jniLibs']
+            jni.srcDirs = []
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+dependencies {
+    compile fileTree(dir: 'libs', include: ['*.jar'])
+    testCompile 'junit:junit:4.12'
+}
+
+
+task ndkBuild(type: Exec, description: 'Compile JNI source with NDK') {
+    Properties properties = new Properties()
+    properties.load(project.rootProject.file('local.properties').newDataInputStream())
+    def ndkDir = properties.getProperty('ndk.dir')
+    if (org.apache.tools.ant.taskdefs.condition.Os.isFamily(org.apache.tools.ant.taskdefs.condition.Os.FAMILY_WINDOWS)) {
+        commandLine "${ndkDir}/ndk-build.cmd", 'NDK_LIBS_OUT=' + file('src/main/jniLibs').absolutePath, '-C', file('src/main/jni').absolutePath
+    } else {
+        commandLine "${ndkDir}/ndk-build", 'NDK_LIBS_OUT=' + file('src/main/jniLibs').absolutePath, '-C', file('src/main/jni').absolutePath
+    }
+}
+
+tasks.withType(JavaCompile) {
+    compileTask -> compileTask.dependsOn ndkBuild
+}
+
+task ndkClean(type: Exec, description: 'Clean NDK Binaries') {
+    Properties properties = new Properties()
+    properties.load(project.rootProject.file('local.properties').newDataInputStream())
+    def ndkDir = properties.getProperty('ndk.dir')
+
+    if (org.apache.tools.ant.taskdefs.condition.Os.isFamily(org.apache.tools.ant.taskdefs.condition.Os.FAMILY_WINDOWS)) {
+        commandLine "${ndkDir}/ndk-build.cmd", 'clean','-C', file('src/main/jni').absolutePath
+    } else {
+        commandLine "${ndkDir}/ndk-build", 'clean','-C', file('src/main/jni').absolutePath
+    }
+}
+
+clean.dependsOn 'ndkClean'
