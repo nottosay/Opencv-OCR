@@ -1,5 +1,7 @@
 package com.opencv.demo;
 
+import java.util.List;
+
 /**
  * Created by wally.yan on 2016/10/25.
  */
@@ -9,5 +11,5 @@ public class OpenCVHelper {
         System.loadLibrary("OpenCV");
     }
 
-    public static native String ocr(String str);
+    public static native List<String> ocr(String imgPach,String intermediatePach);
 }

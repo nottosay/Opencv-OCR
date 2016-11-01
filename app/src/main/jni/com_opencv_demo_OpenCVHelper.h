@@ -10,10 +10,10 @@ extern "C" {
 /*
  * Class:     com_opencv_demo_OpenCVHelper
  * Method:    ocr
- * Signature: (Ljava/lang/String;)V
+ * Signature: (Ljava/lang/String;Ljava/lang/String;)Ljava/util/List;
  */
-JNIEXPORT jstring JNICALL Java_com_opencv_demo_OpenCVHelper_ocr
-  (JNIEnv *, jclass, jstring);
+JNIEXPORT jobject JNICALL Java_com_opencv_demo_OpenCVHelper_ocr
+  (JNIEnv *, jclass, jstring, jstring);
 
 #ifdef __cplusplus
 }

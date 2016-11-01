@@ -14,6 +14,8 @@ using namespace cv;
 
 #define   LOGI(...)  __android_log_print(ANDROID_LOG_INFO,"opencv_jni",__VA_ARGS__)
 
+std::string  file_patch = "";
+
 Mat getRplane(const Mat &in)
 {
      vector<Mat> splitBGR(in.channels()); //容器大小为通道数3
@@ -53,8 +55,6 @@ bool isEligible(const RotatedRect &candidate)
 
 void posDetect(const Mat &in, vector<RotatedRect> & rects)
 {
-
-
     Mat threshold_R;
     OstuBeresenThreshold(in ,threshold_R ); //二值化
 
@@ -65,9 +65,9 @@ void posDetect(const Mat &in, vector<RotatedRect> & rects)
 
     cv::imwrite("/storage/emulated/0/opencv_img/threshold_R.png", threshold_Inv);
 
-    Mat elm = getStructuringElement(MORPH_RECT ,Size(2 ,2));
+    /*Mat elm = getStructuringElement(MORPH_RECT ,Size(2 ,2));
     erode(threshold_Inv,threshold_Inv,elm);//腐蚀
-    cv::imwrite("/storage/emulated/0/opencv_img/erode.png", threshold_Inv);
+    cv::imwrite("/storage/emulated/0/opencv_img/erode.png", threshold_Inv);*/
 
 
     Mat element = getStructuringElement(MORPH_RECT ,Size(15 ,3));
@@ -102,36 +102,55 @@ void posDetect(const Mat &in, vector<RotatedRect> & rects)
 
 
 
-void normalPosArea(const Mat &intputImg, RotatedRect &rects_optimal, Mat& output_area)
+void normalPosArea(const Mat &intputImg, vector <RotatedRect> &rects, vector<std::string>& output)
 {
+
+    Mat img_rotated;
     float r,angle;
 
-    angle = rects_optimal.angle;
-    r = (float)rects_optimal.size.width / (float) (float)rects_optimal.size.height;
+    RotatedRect rect =  rects[0] ;
+    angle = rect.angle;
+    r = (float)rect.size.width / (float) (float)rect.size.height;
     if(r<1)
+    {
         angle = 90 + angle;
-    Mat rotmat = getRotationMatrix2D(rects_optimal.center , angle,1);//获得变形矩阵对象
-    Mat img_rotated;
+    }
+    Mat rotmat = getRotationMatrix2D(rect.center , angle,1);//获得变形矩阵对象
+
     warpAffine(intputImg ,img_rotated,rotmat, intputImg.size(),CV_INTER_CUBIC);
 
     cv::imwrite("/storage/emulated/0/opencv_img/img_rotated.png", img_rotated);
 
-    //裁剪图像
-    Size rect_size = rects_optimal.size;
+    int num = 0;
 
-    if(r<1)
-        std::swap(rect_size.width, rect_size.height);
-    Mat  img_crop;
-    getRectSubPix(img_rotated ,rect_size,rects_optimal.center , img_crop );
+    for(vector<RotatedRect>::iterator iter=rects.begin();iter!=rects.end();iter++)
+     {
+         RotatedRect rects_optimal =  *iter ;
 
-    //用光照直方图调整所有裁剪得到的图像，使具有相同宽度和高度，适用于训练和分类
-    Mat resultResized;
-    resultResized.create(20,300,CV_8UC1);
-    cv::resize(img_crop , resultResized,resultResized.size() , 0,0,INTER_CUBIC);
+         //裁剪图像
+         Size rect_size = rects_optimal.size;
 
-    cv::imwrite("/storage/emulated/0/opencv_img/resultResized.png", resultResized);
+         LOGI("rect_size.width : %d" ,rect_size.width);
+         LOGI("rect_size.height : %d" ,rect_size.height);
 
-    resultResized.copyTo(output_area);
+         float d = (float)rects_optimal.size.width / (float) (float)rects_optimal.size.height;
+         if(d<1)
+         {
+             std::swap(rect_size.width, rect_size.height);
+         }
+         Mat  img_crop;
+         int y = 10 * rect_size.width / rect_size.height ;
+         getRectSubPix(img_rotated ,rect_size,rects_optimal.center , img_crop);
+
+         std::stringstream stream;
+         stream<<num;
+
+         std::string str = "/storage/emulated/0/opencv_img/"+stream.str()+".png";
+
+         cv::imwrite(str, img_crop);
+         output.push_back(str);
+         num++;
+     }
 
 }
 
@@ -402,12 +421,18 @@ void getParityBit(vector<int> &char_result)
 }
 
 
-JNIEXPORT jstring JNICALL Java_com_opencv_demo_OpenCVHelper_ocr
-  (JNIEnv *env, jclass cls,jstring str){
+JNIEXPORT jobject JNICALL Java_com_opencv_demo_OpenCVHelper_ocr
+  (JNIEnv *env, jclass cls,jstring img,jstring save){
 
-    const char* ch = (char*) (env->GetStringUTFChars(str, 0));
+    const char* path = (char*) (env->GetStringUTFChars(save, 0));
+    file_patch = path;
+    delete path;
+
+    const char* ch = (char*) (env->GetStringUTFChars(img, 0));
     LOGI("-------------------jstringTostring: %s",ch);
     Mat imgSrc = cv::imread(ch,1);
+    delete ch;
+
     Mat imgRplane = getRplane(imgSrc); //获得原始图像R分量
     cv::imwrite("/storage/emulated/0/opencv_img/imgRplane.png", imgRplane);
 
@@ -415,36 +440,21 @@ JNIEXPORT jstring JNICALL Java_com_opencv_demo_OpenCVHelper_ocr
     vector <RotatedRect>  rects;
     posDetect(imgRplane ,rects);  //获得身份证号码区域
     LOGI("-------------------posDetect: %d",rects.size());
-    Mat outputMat;
-    normalPosArea(imgRplane ,rects[0],outputMat); //获得身份证号码字符矩阵
+    vector<std::string> outputMat;
+    normalPosArea(imgRplane ,rects,outputMat); //获得身份证号码字符矩阵
     LOGI("-------------------normalPosArea");
-    vector<Mat> char_mat;  //获得切割得的字符矩阵
-    char_segment(outputMat , char_mat);
-    LOGI("-------------------char_segment");
-    //getAnnXML();  //该函数只需执行一次，获得训练矩阵和标签矩阵，保存于xml文件中
 
-    CvANN_MLP ann;
-    ann_train(ann, 10, 24); //10为输出层结点,也等于输出的类别，24为隐藏层结点
-    LOGI("-------------------ann_train");
-    vector<int> char_result;
-    classify( ann ,char_mat ,char_result);
-    LOGI("-------------------classify");
-    getParityBit(char_result); //最后一位易出错，直接由前17位计算最后一位
-    LOGI("-------------------getParityBit");
-    std::string id = "";
-    for(int i = 0; i < char_result.size();++i)
+    jclass clazz = env->FindClass("java/util/ArrayList");
+    jobject obj = env->NewObject(clazz, (*env).GetMethodID(clazz, "<init>", "()V"));
+    for (int n=0;n<outputMat.size();n++)
     {
-        if (char_result[i] == 10){
-            id += "X";
-         }else{
-            std::stringstream ss;
-            ss<<char_result[i];
-            id += ss.str();
-        }
+       std::string s = outputMat[n];
+       const int len = s.length();
+       char* str = new char[len+1];
+       strcpy(str,s.c_str());
+       jstring _str = env->NewStringUTF(str);
+       env->CallBooleanMethod(obj, env->GetMethodID(clazz, "add", "(Ljava/lang/Object;)Z"), _str);
     }
-    const char* id_char = id.c_str();
-    jstring js =  env->NewStringUTF(id_char);
-    LOGI("-------------------stringTojstring");
-    delete id_char;
-    return js;
+
+    return obj;
 }
