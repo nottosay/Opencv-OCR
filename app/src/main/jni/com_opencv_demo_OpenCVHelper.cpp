@@ -20,8 +20,6 @@ Mat getRplane(const Mat &in)
 {
      vector<Mat> splitBGR(in.channels()); //容器大小为通道数3
      split(in,splitBGR);
-     LOGI("-------------------split : %d",in.cols);
-     LOGI("-------------------split : %d",in.rows);
      if(in.cols >600)
      {
          Mat resizeR( 450,600 , CV_8UC1);
@@ -37,6 +35,9 @@ Mat getRplane(const Mat &in)
 void OstuBeresenThreshold(const Mat &in, Mat &out) //输入为单通道
 {
     threshold(in ,out, 0,255 ,CV_THRESH_OTSU); //otsu获得全局阈值
+    Mat elm = getStructuringElement(MORPH_RECT ,Size(2 ,2));
+    dilate(out,out,elm);//膨胀
+    erode(out,out,elm);//腐蚀
 }
 
 bool isEligible(const RotatedRect &candidate)
@@ -47,7 +48,20 @@ bool isEligible(const RotatedRect &candidate)
 
     int area = candidate.size.height * candidate.size.width;
 
-    if(area < min || area > max) //满足该条件才认为该candidate为号码区域
+    Size rect_size = candidate.size;
+
+    LOGI("angle : %f" ,candidate.angle);
+
+    if(candidate.angle == 0)
+    {
+        std::swap(rect_size.width, rect_size.height);
+    }
+
+    int r = rect_size.width / rect_size.height;
+
+    LOGI("r : %d" ,r);
+
+    if(area < min || area > max || r > 2) //满足该条件才认为该candidate为号码区域
         return false;
     else
         return true;
@@ -65,11 +79,6 @@ void posDetect(const Mat &in, vector<RotatedRect> & rects)
 
     cv::imwrite("/storage/emulated/0/opencv_img/threshold_R.png", threshold_Inv);
 
-    /*Mat elm = getStructuringElement(MORPH_RECT ,Size(2 ,2));
-    erode(threshold_Inv,threshold_Inv,elm);//腐蚀
-    cv::imwrite("/storage/emulated/0/opencv_img/erode.png", threshold_Inv);*/
-
-
     Mat element = getStructuringElement(MORPH_RECT ,Size(15 ,3));
 
     morphologyEx(threshold_Inv ,threshold_Inv,CV_MOP_CLOSE,element);//闭形态学的结构元素
@@ -77,7 +86,7 @@ void posDetect(const Mat &in, vector<RotatedRect> & rects)
     cv::imwrite("/storage/emulated/0/opencv_img/threshold_Inv.png", threshold_Inv);
 
     vector< vector <Point> > contours;
-    findContours(threshold_Inv ,contours,CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE);//只检测外轮廓
+    findContours(threshold_Inv ,contours,CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE);//只检测外轮廓
 
     LOGI("contours size : %d",contours.size());
 
@@ -110,6 +119,7 @@ void normalPosArea(const Mat &intputImg, vector <RotatedRect> &rects, vector<std
 
     RotatedRect rect =  rects[0] ;
     angle = rect.angle;
+    LOGI("angle[0] : %f" ,angle);
     r = (float)rect.size.width / (float) (float)rect.size.height;
     if(r<1)
     {
@@ -130,21 +140,16 @@ void normalPosArea(const Mat &intputImg, vector <RotatedRect> &rects, vector<std
          //裁剪图像
          Size rect_size = rects_optimal.size;
 
-         LOGI("rect_size.width : %d" ,rect_size.width);
-         LOGI("rect_size.height : %d" ,rect_size.height);
-
          float d = (float)rects_optimal.size.width / (float) (float)rects_optimal.size.height;
-         if(d<1)
+         if(d < 1)
          {
              std::swap(rect_size.width, rect_size.height);
          }
          Mat  img_crop;
-         int y = 10 * rect_size.width / rect_size.height ;
          getRectSubPix(img_rotated ,rect_size,rects_optimal.center , img_crop);
 
          std::stringstream stream;
          stream<<num;
-
          std::string str = "/storage/emulated/0/opencv_img/"+stream.str()+".png";
 
          cv::imwrite(str, img_crop);
@@ -254,7 +259,6 @@ void calcGradientFeat(const Mat &imgSrc, Mat &out)
     vector <float>  feat ;
     Mat image;
 
-    //cvtColor(imgSrc,image,CV_BGR2GRAY);
     cv::resize(imgSrc,image,Size(8,16));
 
     // 计算x方向和y方向上的滤波
@@ -429,7 +433,6 @@ JNIEXPORT jobject JNICALL Java_com_opencv_demo_OpenCVHelper_ocr
     delete path;
 
     const char* ch = (char*) (env->GetStringUTFChars(img, 0));
-    LOGI("-------------------jstringTostring: %s",ch);
     Mat imgSrc = cv::imread(ch,1);
     delete ch;
 
@@ -437,9 +440,11 @@ JNIEXPORT jobject JNICALL Java_com_opencv_demo_OpenCVHelper_ocr
     cv::imwrite("/storage/emulated/0/opencv_img/imgRplane.png", imgRplane);
 
     LOGI("-------------------getRplane");
+
     vector <RotatedRect>  rects;
     posDetect(imgRplane ,rects);  //获得身份证号码区域
     LOGI("-------------------posDetect: %d",rects.size());
+
     vector<std::string> outputMat;
     normalPosArea(imgRplane ,rects,outputMat); //获得身份证号码字符矩阵
     LOGI("-------------------normalPosArea");

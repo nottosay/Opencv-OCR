@@ -12,6 +12,8 @@ import android.widget.TextView;
 
 import com.googlecode.tesseract.android.TessBaseAPI;
 
+import java.io.File;
+import java.util.ArrayList;
 import java.util.List;
 
 import rx.Observable;
@@ -46,8 +48,13 @@ public class MainActivity extends Activity {
             public Observable<List<String>> call() {
                 String imgUrl = Environment.getExternalStorageDirectory() + "/id_card.jpg";
                 Log.i("wally", imgUrl);
-                List<String> s = OpenCVHelper.ocr(imgUrl, getFilesDir() + "/opecv_img/");
-                return Observable.just(s);
+                List<String> list = OpenCVHelper.ocr(imgUrl, getFilesDir() + "/opecv_img/");
+                List<String> ocrs = new ArrayList<String>();
+                for (String s : list) {
+                    Log.i("wally:list", s);
+                    //ocrs.add(doOcr(s));
+                }
+                return Observable.just(ocrs);
             }
         }).subscribeOn(Schedulers.io()) // 指定 subscribe() 发生在 IO 线程
                 .observeOn(AndroidSchedulers.mainThread()) // 指定 Subscriber 的回调发生在主线程
@@ -80,22 +87,27 @@ public class MainActivity extends Activity {
      */
     public String doOcr(String fileName) {
 
-        Bitmap bitmap = BitmapFactory.decodeFile(Environment.getExternalStorageDirectory() + "/opencv_img/" + fileName);
 
-        TessBaseAPI baseApi = new TessBaseAPI();
+        File file = new File(Environment.getExternalStorageDirectory() + "/tessdata/", "chi_sim.traineddata");
+        if (file.exists()) {
+            Bitmap bitmap = BitmapFactory.decodeFile(fileName);
 
-        baseApi.init(Environment.getExternalStorageDirectory().getPath(), "/chi_sim");
+            TessBaseAPI baseApi = new TessBaseAPI();
+            baseApi.init(Environment.getExternalStorageDirectory() + "/", "chi_sim");
 
-        // 必须加此行，tess-two要求BMP必须为此配置
-        bitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true);
+            // 必须加此行，tess-two要求BMP必须为此配置
+            bitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true);
 
-        baseApi.setImage(bitmap);
+            baseApi.setImage(bitmap);
 
-        String text = baseApi.getUTF8Text();
+            String text = baseApi.getUTF8Text();
 
-        baseApi.clear();
-        baseApi.end();
+            baseApi.clear();
+            baseApi.end();
 
-        return text;
+            return text;
+        }
+
+        return null;
     }
 }

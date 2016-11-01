@@ -13,7 +13,7 @@ android {
 
     sourceSets {
         main {
-            jniLibs.srcDirs = ['src/main/jniLibs']
+            jniLibs.srcDirs = ['src/main/jniLibs','src/main/libs']
             jni.srcDirs = []
         }
     }
@@ -39,7 +39,8 @@ task ndkBuild(type: Exec, description: 'Compile JNI source with NDK') {
     properties.load(project.rootProject.file('local.properties').newDataInputStream())
     def ndkDir = properties.getProperty('ndk.dir')
     if (org.apache.tools.ant.taskdefs.condition.Os.isFamily(org.apache.tools.ant.taskdefs.condition.Os.FAMILY_WINDOWS)) {
-        commandLine "${ndkDir}/ndk-build.cmd", 'NDK_LIBS_OUT=' + file('src/main/jniLibs').absolutePath, '-C', file('src/main/jni').absolutePath
+        //commandLine "${ndkDir}/ndk-build.cmd", 'NDK_LIBS_OUT=' + file('src/main/jniLibs').absolutePath, '-C', file('src/main/jni').absolutePath
+        commandLine "${ndkDir}/ndk-build.cmd",  '-C', file('src/main/jni').absolutePath
     } else {
         commandLine "${ndkDir}/ndk-build", 'NDK_LIBS_OUT=' + file('src/main/jniLibs').absolutePath, '-C', file('src/main/jni').absolutePath
     }
