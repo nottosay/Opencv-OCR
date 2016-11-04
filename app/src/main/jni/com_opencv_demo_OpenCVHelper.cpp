@@ -34,10 +34,8 @@ Mat getRplane(const Mat &in)
 
 void OstuBeresenThreshold(const Mat &in, Mat &out) //输入为单通道
 {
-    threshold(in ,out, 0,255 ,CV_THRESH_OTSU); //otsu获得全局阈值
-    Mat elm = getStructuringElement(MORPH_RECT ,Size(2 ,2));
-    dilate(out,out,elm);//膨胀
-    erode(out,out,elm);//腐蚀
+    GaussianBlur(in, out, Size( 5, 5), 0, 0 );
+    threshold(out , out, 0,255 ,CV_THRESH_OTSU); //otsu获得全局阈值
 }
 
 bool isEligible(const RotatedRect &candidate)
@@ -52,6 +50,11 @@ bool isEligible(const RotatedRect &candidate)
 
     LOGI("angle : %f" ,candidate.angle);
 
+    if(rect_size.width == 0 || rect_size.height == 0)
+    {
+        return false;
+    }
+
     if(candidate.angle == 0)
     {
         std::swap(rect_size.width, rect_size.height);
@@ -61,7 +64,7 @@ bool isEligible(const RotatedRect &candidate)
 
     LOGI("r : %d" ,r);
 
-    if(area < min || area > max || r > 2) //满足该条件才认为该candidate为号码区域
+    if(area < min || area > max || r >= 2) //满足该条件才认为该candidate为有效区域
         return false;
     else
         return true;
@@ -80,13 +83,18 @@ void posDetect(const Mat &in, vector<RotatedRect> & rects)
     cv::imwrite("/storage/emulated/0/opencv_img/threshold_R.png", threshold_Inv);
 
     Mat element = getStructuringElement(MORPH_RECT ,Size(15 ,3));
-
     morphologyEx(threshold_Inv ,threshold_Inv,CV_MOP_CLOSE,element);//闭形态学的结构元素
+
+    cv::imwrite("/storage/emulated/0/opencv_img/morphologyEx.png", threshold_Inv);
+
+    Mat elm = getStructuringElement(MORPH_RECT ,Size(15 ,6));
+    dilate(threshold_Inv,threshold_Inv,elm);//膨胀
+
 
     cv::imwrite("/storage/emulated/0/opencv_img/threshold_Inv.png", threshold_Inv);
 
     vector< vector <Point> > contours;
-    findContours(threshold_Inv ,contours,CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE);//只检测外轮廓
+    findContours(threshold_Inv ,contours,CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE);//只检测外轮廓
 
     LOGI("contours size : %d",contours.size());
 
@@ -140,13 +148,20 @@ void normalPosArea(const Mat &intputImg, vector <RotatedRect> &rects, vector<std
          //裁剪图像
          Size rect_size = rects_optimal.size;
 
-         float d = (float)rects_optimal.size.width / (float) (float)rects_optimal.size.height;
+         float d = (float)rect_size.width / (float) (float)rect_size.height;
          if(d < 1)
          {
              std::swap(rect_size.width, rect_size.height);
          }
          Mat  img_crop;
          getRectSubPix(img_rotated ,rect_size,rects_optimal.center , img_crop);
+
+         //用光照直方图调整所有裁剪得到的图像，使具有相同宽度和高度，适用于训练和分类
+         float r = (float)rect_size.width / (float) (float)rect_size.height;
+
+         Mat resultResized;
+         resultResized.create(60,r * 60,CV_8UC1);
+         cv::resize(img_crop , resultResized,resultResized.size() , 0,0,INTER_CUBIC);
 
          std::stringstream stream;
          stream<<num;

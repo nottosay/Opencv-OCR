@@ -25,6 +25,7 @@ import rx.schedulers.Schedulers;
 public class MainActivity extends Activity {
 
     private TextView textView;
+    private TessBaseAPI baseApi;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -39,6 +40,9 @@ public class MainActivity extends Activity {
                 toOcr();
             }
         });
+
+        baseApi = new TessBaseAPI();
+        baseApi.init(Environment.getExternalStorageDirectory() + "/", "chi_sim");
     }
 
 
@@ -52,7 +56,7 @@ public class MainActivity extends Activity {
                 List<String> ocrs = new ArrayList<String>();
                 for (String s : list) {
                     Log.i("wally:list", s);
-                    //ocrs.add(doOcr(s));
+                    ocrs.add(doOcr(s));
                 }
                 return Observable.just(ocrs);
             }
@@ -92,9 +96,6 @@ public class MainActivity extends Activity {
         if (file.exists()) {
             Bitmap bitmap = BitmapFactory.decodeFile(fileName);
 
-            TessBaseAPI baseApi = new TessBaseAPI();
-            baseApi.init(Environment.getExternalStorageDirectory() + "/", "chi_sim");
-
             // 必须加此行，tess-two要求BMP必须为此配置
             bitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true);
 
@@ -103,11 +104,16 @@ public class MainActivity extends Activity {
             String text = baseApi.getUTF8Text();
 
             baseApi.clear();
-            baseApi.end();
 
             return text;
         }
 
         return null;
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        baseApi.end();
     }
 }
